@@ -8,7 +8,7 @@ A roundup of tricks to cut token consumption and better control your costs on Cl
 - **Batch your prompts** — 3 separate messages = 3× more expensive than one combined message. Edit/regenerate instead of correcting in a follow-up.
 - **Plan mode first** — keeps Claude from heading in the wrong direction. Add to `CLAUDE.md`: *"Don't make any changes until you're 95% confident"*.
 - **`/context` and `/cost`** — see what's eating tokens (history, MCP, files). `/usage` in subscription mode.
-- **Status line** — shows model, % context used, and rate limit live in the terminal.
+- **`/statusline`** — shows model, % context used, and rate limit live in the terminal.
 - **Cloud dashboard** — check your usage every 20-30 min on *claude.ai > Settings > Usage*.
 - **Be precise about what you paste** — don't dump a whole file when only one function is relevant.
 - **Watch Claude** — stop it if it loops or heads the wrong way; this saves thousands of tokens.
