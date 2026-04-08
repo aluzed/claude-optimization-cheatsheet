@@ -8,7 +8,7 @@ Récapitulatif de hacks pour réduire la consommation de tokens et mieux contrô
 - **Regrouper les prompts** — 3 messages séparés = 3x plus cher qu'un seul combiné. Éditer/régénérer plutôt que corriger en follow-up.
 - **Plan mode d'abord** — évite que Claude parte dans la mauvaise direction. Ajouter dans `CLAUDE.md` : *"Ne fais aucun changement tant que tu n'as pas 95% de confiance"*.
 - **`/context` et `/cost`** — voir ce qui consomme (historique, MCP, fichiers). `/usage` en mode subscription.
-- **/statusline** — affiche modèle, % contexte utilisé, rate limit en temps réel dans le terminal.
+- **`/statusline`** — affiche modèle, % contexte utilisé, rate limit en temps réel dans le terminal.
 - **Dashboard cloud** — checker sa conso toutes les 20-30 min sur *claude.ai > Settings > Usage*.
 - **Être précis dans ce qu'on colle** — ne pas balancer un fichier entier si seule une fonction est concernée.
 - **Surveiller Claude** — l'arrêter s'il boucle ou part dans la mauvaise direction, ça économise des milliers de tokens.

@@ -1,91 +1,24 @@
 #!/usr/bin/env python3
 """
-Génère une cheatsheet HTML stylée (thème notebook/pastel) à partir d'un markdown.
+Génère un shell HTML statique (`docs/index.html`) qui charge dynamiquement
+`fr.md` et `en.md` côté navigateur pour rendre la cheatsheet.
 
-Format markdown attendu :
-    # Titre
-    Paragraphe d'intro...
-    - **Titre du conseil** — corps du conseil avec `code` et *italique*.
-    - **Autre conseil** — ...
+Le sélecteur de langue (pills 🇫🇷 / 🇬🇧) bascule le contenu sans rechargement
+de page. Le bouton « Télécharger en PDF » utilise `window.print()`.
 
-Usage minimal :
-    python build_cheatsheet.py input.md output.html
-
-Avec sélecteur de langue :
-    python build_cheatsheet.py optimiser-tokens.md index.html \\
-        --lang fr --alt-lang en --alt-href en.html
-    python build_cheatsheet.py optimize-tokens.md   en.html    \\
-        --lang en --alt-lang fr --alt-href index.html
+Usage :
+    python3 build_cheatsheet.py
 """
 
-import argparse
-import html
-import re
-import sys
+import shutil
 from pathlib import Path
 
-BULLET_CHAR = "✓"
-
-# Métadonnées par langue : drapeau emoji + libellé bouton PDF.
-# L'ordre du dict détermine l'ordre d'affichage des pills (stable entre les pages).
-LANG_META = {
-    "fr": {"flag": "🇫🇷", "pdf_label": "Télécharger en PDF", "label": "Français"},
-    "en": {"flag": "🇬🇧", "pdf_label": "Download as PDF",   "label": "English"},
-}
+ROOT = Path(__file__).resolve().parent
+DOCS = ROOT / "docs"
+SOURCES = ["fr.md", "en.md"]
 
 
-# --- Parsing markdown ---------------------------------------------------------
-
-def parse_markdown(md: str):
-    """Retourne (title, intro, [bullets]) où bullet = (title_html, body_html)."""
-    title = ""
-    intro_lines = []
-    bullets = []
-
-    for raw in md.splitlines():
-        line = raw.rstrip()
-        if not line.strip():
-            continue
-        if line.startswith("# "):
-            title = line[2:].strip()
-        elif line.lstrip().startswith("- "):
-            bullets.append(line.lstrip()[2:].strip())
-        elif not bullets:  # avant le premier bullet => intro
-            intro_lines.append(line.strip())
-
-    intro = " ".join(intro_lines)
-    parsed_bullets = [split_bullet(b) for b in bullets]
-    return title, intro, parsed_bullets
-
-
-def split_bullet(bullet: str):
-    """Sépare un bullet '**Titre** — corps' en (titre_html, corps_html)."""
-    m = re.match(r"\*\*(.+?)\*\*\s*[—–-]\s*(.*)", bullet)
-    if m:
-        return inline_md(m.group(1)), inline_md(m.group(2))
-    return "", inline_md(bullet)
-
-
-def inline_md(text: str) -> str:
-    """Convertit `code`, **bold**, *italic* en HTML. Échappe le reste."""
-    placeholders = {}
-
-    def stash(match):
-        key = f"\x00{len(placeholders)}\x00"
-        placeholders[key] = f"<code>{html.escape(match.group(1))}</code>"
-        return key
-
-    text = re.sub(r"`([^`]+)`", stash, text)
-    text = html.escape(text)
-    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-    text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", text)
-
-    for key, value in placeholders.items():
-        text = text.replace(key, value)
-    return text
-
-
-# --- Génération HTML ----------------------------------------------------------
+# --- CSS (inchangé hormis quelques ajustements) -------------------------------
 
 CSS = r"""
   :root {
@@ -124,15 +57,16 @@ CSS = r"""
     padding: 5px; box-shadow: 3px 3px 0 var(--ink);
     transform: rotate(2deg);
   }
-  .lang-switch a {
+  .lang-switch button {
     display: inline-flex; align-items: center; justify-content: center;
     width: 38px; height: 38px; border-radius: 50%;
-    text-decoration: none; font-size: 22px; line-height: 1;
+    background: transparent; border: none; cursor: pointer;
+    font-size: 22px; line-height: 1; padding: 0;
     filter: grayscale(0.55); opacity: 0.55;
     transition: filter 0.15s ease, opacity 0.15s ease, background 0.15s ease;
   }
-  .lang-switch a:hover { filter: grayscale(0); opacity: 1; }
-  .lang-switch a.active {
+  .lang-switch button:hover { filter: grayscale(0); opacity: 1; }
+  .lang-switch button.active {
     filter: grayscale(0); opacity: 1;
     background: var(--accent-yellow);
     box-shadow: inset 0 0 0 1.5px var(--ink);
@@ -182,6 +116,12 @@ CSS = r"""
   code { background: var(--paper); color: #b85c3a; padding: 1px 7px; border-radius: 4px; font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; border: 1px dashed #d4b8a8; }
   em { font-style: italic; font-weight: 500; }
   footer { text-align: center; color: var(--ink-soft); font-family: "Caveat", cursive; font-size: 20px; margin-top: 50px; padding-top: 20px; border-top: 2px dashed var(--border-soft); }
+  /* État de chargement / erreur */
+  .cs-loading, .cs-error {
+    text-align: center; padding: 40px 20px;
+    font-family: "Caveat", cursive; font-size: 24px; color: var(--ink-soft);
+  }
+  .cs-error { color: #b85c3a; }
   /* Impression / export PDF via window.print() */
   @media print {
     @page { size: A4; margin: 12mm 10mm; }
@@ -219,102 +159,210 @@ CSS = r"""
     h1 { font-size: 34px; }
     .tip-content { font-size: 17px; }
     .download-btn { padding: 9px 16px; font-size: 17px; }
-    .lang-switch a { width: 32px; height: 32px; font-size: 18px; }
+    .lang-switch button { width: 32px; height: 32px; font-size: 18px; }
   }
 """
 
-PDF_SCRIPT = r"""
-  function downloadPDF() { window.print(); }
+
+# --- JS : parsing markdown + rendu + lang switch ------------------------------
+
+JS = r"""
+(() => {
+  const LANG_META = {
+    fr: { flag: "🇫🇷", label: "Français", pdfLabel: "Télécharger en PDF", file: "fr.md" },
+    en: { flag: "🇬🇧", label: "English",  pdfLabel: "Download as PDF",   file: "en.md" },
+  };
+  const DEFAULT_LANG = "fr";
+  const STORAGE_KEY = "cheatsheet-lang";
+
+  const cache = {}; // lang -> parsed object
+
+  // --- Markdown parsing -------------------------------------------------------
+
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function inlineMd(text) {
+    const placeholders = [];
+    text = text.replace(/`([^`]+)`/g, (_, code) => {
+      placeholders.push(`<code>${escapeHtml(code)}</code>`);
+      return `\u0000${placeholders.length - 1}\u0000`;
+    });
+    text = escapeHtml(text);
+    text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    text = text.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>");
+    text = text.replace(/\u0000(\d+)\u0000/g, (_, i) => placeholders[+i]);
+    return text;
+  }
+
+  function splitBullet(b) {
+    const m = b.match(/^\*\*(.+?)\*\*\s*[—–-]\s*(.*)$/);
+    if (m) return { title: inlineMd(m[1]), body: inlineMd(m[2]) };
+    return { title: "", body: inlineMd(b) };
+  }
+
+  function parseMarkdown(md) {
+    let title = "";
+    const introLines = [];
+    const bullets = [];
+    for (const raw of md.split("\n")) {
+      const line = raw.replace(/\s+$/, "");
+      if (!line.trim()) continue;
+      if (line.startsWith("# ")) {
+        title = line.slice(2).trim();
+      } else if (line.trimStart().startsWith("- ")) {
+        bullets.push(line.trimStart().slice(2).trim());
+      } else if (bullets.length === 0) {
+        introLines.push(line.trim());
+      }
+    }
+    return {
+      title,
+      intro: introLines.join(" "),
+      bullets: bullets.map(splitBullet),
+    };
+  }
+
+  // --- Rendu ------------------------------------------------------------------
+
+  function render(parsed, lang) {
+    document.documentElement.lang = lang;
+    document.title = `Cheatsheet — ${parsed.title}`;
+
+    document.getElementById("cs-title").textContent = parsed.title;
+    document.getElementById("cs-subtitle").textContent = parsed.intro;
+    document.getElementById("cs-footer").textContent = `✦ ${parsed.title} ✦`;
+    document.getElementById("pdf-label").textContent = LANG_META[lang].pdfLabel;
+
+    const section = document.getElementById("cs-section");
+    section.innerHTML = parsed.bullets
+      .map(({ title, body }) => {
+        const titleHtml = title ? `<span class="tip-title">${title}</span> — ` : "";
+        return (
+          `<div class="tip">` +
+          `<div class="tip-bullet">✓</div>` +
+          `<div class="tip-content">${titleHtml}${body}</div>` +
+          `</div>`
+        );
+      })
+      .join("\n");
+
+    // Met à jour les pills (active state)
+    document.querySelectorAll(".lang-switch button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.lang === lang);
+      if (btn.dataset.lang === lang) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
+    });
+  }
+
+  function showError(msg) {
+    const section = document.getElementById("cs-section");
+    section.innerHTML = `<div class="cs-error">${escapeHtml(msg)}</div>`;
+  }
+
+  // --- Chargement -------------------------------------------------------------
+
+  async function loadLang(lang) {
+    if (cache[lang]) return cache[lang];
+    const res = await fetch(LANG_META[lang].file, { cache: "no-cache" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} on ${LANG_META[lang].file}`);
+    const md = await res.text();
+    const parsed = parseMarkdown(md);
+    cache[lang] = parsed;
+    return parsed;
+  }
+
+  async function setLang(lang) {
+    if (!LANG_META[lang]) lang = DEFAULT_LANG;
+    try {
+      const parsed = await loadLang(lang);
+      render(parsed, lang);
+      try { localStorage.setItem(STORAGE_KEY, lang); } catch (_) {}
+      const url = new URL(window.location.href);
+      url.searchParams.set("lang", lang);
+      history.replaceState(null, "", url);
+    } catch (e) {
+      console.error(e);
+      showError(`Impossible de charger ${LANG_META[lang].file} — ${e.message}`);
+    }
+  }
+
+  function initialLang() {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("lang");
+    if (fromUrl && LANG_META[fromUrl]) return fromUrl;
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored && LANG_META[stored]) return stored;
+    } catch (_) {}
+    const nav = (navigator.language || "").slice(0, 2);
+    if (LANG_META[nav]) return nav;
+    return DEFAULT_LANG;
+  }
+
+  window.downloadPDF = () => window.print();
+
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".lang-switch button").forEach((btn) => {
+      btn.addEventListener("click", () => setLang(btn.dataset.lang));
+    });
+    setLang(initialLang());
+  });
+})();
 """
 
 
-def render_lang_switch(lang: str, alt_lang: str | None, alt_href: str | None) -> str:
-    """Construit le bloc HTML du sélecteur de langue, ou chaîne vide si pas d'alt.
+# --- HTML shell ---------------------------------------------------------------
 
-    L'ordre des pills suit LANG_META (stable entre les pages) — seul le href
-    et la classe `.active` changent selon la langue courante.
-    """
-    if not (alt_lang and alt_href):
-        return ""
-
-    hrefs = {alt_lang: alt_href}  # langue alternative → lien
-    items = []
-    for code, meta in LANG_META.items():
-        if code == lang:
-            items.append(
-                f'  <a class="active" aria-current="page" title="{html.escape(meta["label"])}">{meta["flag"]}</a>'
-            )
-        elif code in hrefs:
-            items.append(
-                f'  <a href="{html.escape(hrefs[code])}" title="{html.escape(meta["label"])}">{meta["flag"]}</a>'
-            )
-
-    return (
-        '<nav class="lang-switch" aria-label="Language">\n'
-        + "\n".join(items)
-        + '\n</nav>\n'
-    )
-
-
-def render_html(title: str, intro: str, bullets: list,
-                lang: str, alt_lang: str | None, alt_href: str | None) -> str:
-    tips_html = []
-    for tip_title, tip_body in bullets:
-        title_html = f'<span class="tip-title">{tip_title}</span> — ' if tip_title else ""
-        tips_html.append(
-            f'    <div class="tip">\n'
-            f'      <div class="tip-bullet">{BULLET_CHAR}</div>\n'
-            f'      <div class="tip-content">{title_html}{tip_body}</div>\n'
-            f'    </div>'
-        )
-    tips_block = (
-        '  <section class="section">\n'
-        + "\n".join(tips_html)
-        + "\n  </section>"
-    )
-
-    pdf_label = LANG_META.get(lang, {}).get("pdf_label", "Download as PDF")
-    lang_switch = render_lang_switch(lang, alt_lang, alt_href)
-
-    return f"""<!DOCTYPE html>
-<html lang="{html.escape(lang)}">
+HTML = f"""<!DOCTYPE html>
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cheatsheet — {html.escape(title)}</title>
+<title>Cheatsheet</title>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>{CSS}</style>
 </head>
 <body>
 
 <div class="top-bar">
-{lang_switch}<button class="download-btn" onclick="downloadPDF()">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/>
-    <line x1="12" y1="15" x2="12" y2="3"/>
-  </svg>
-  {html.escape(pdf_label)}
-</button>
+  <nav class="lang-switch" aria-label="Language">
+    <button type="button" data-lang="fr" title="Français">🇫🇷</button>
+    <button type="button" data-lang="en" title="English">🇬🇧</button>
+  </nav>
+  <button class="download-btn" onclick="downloadPDF()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    <span id="pdf-label">Télécharger en PDF</span>
+  </button>
 </div>
 
 <div class="container" id="cheatsheet">
 
   <header>
     <div class="badge">✦ Cheatsheet ✦</div>
-    <h1>{html.escape(title)}</h1>
-    <p class="subtitle">{html.escape(intro)}</p>
+    <h1 id="cs-title">…</h1>
+    <p class="subtitle" id="cs-subtitle"></p>
   </header>
 
-{tips_block}
+  <section class="section" id="cs-section">
+    <div class="cs-loading">Chargement…</div>
+  </section>
 
-  <footer>
-    ✦ {html.escape(title)} ✦
-  </footer>
+  <footer id="cs-footer">✦</footer>
 
 </div>
 
-<script>{PDF_SCRIPT}</script>
+<script>{JS}</script>
 
 </body>
 </html>
@@ -322,22 +370,17 @@ def render_html(title: str, intro: str, bullets: list,
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Génère une cheatsheet HTML à partir d'un markdown.")
-    parser.add_argument("input", help="Fichier markdown source")
-    parser.add_argument("output", nargs="?", help="Fichier HTML de sortie (défaut: input.html)")
-    parser.add_argument("--lang", default="fr", help="Code langue de la page (défaut: fr)")
-    parser.add_argument("--alt-lang", help="Code langue alternative pour le sélecteur (ex: en)")
-    parser.add_argument("--alt-href", help="Lien vers la page alternative (ex: en.html)")
-    args = parser.parse_args()
+    DOCS.mkdir(exist_ok=True)
+    (DOCS / "index.html").write_text(HTML, encoding="utf-8")
+    print(f"✓ {DOCS / 'index.html'} généré")
 
-    src = Path(args.input)
-    dst = Path(args.output) if args.output else src.with_suffix(".html")
-
-    md = src.read_text(encoding="utf-8")
-    title, intro, bullets = parse_markdown(md)
-    html_out = render_html(title, intro, bullets, args.lang, args.alt_lang, args.alt_href)
-    dst.write_text(html_out, encoding="utf-8")
-    print(f"✓ {dst} généré ({len(bullets)} conseils)")
+    for name in SOURCES:
+        src = ROOT / name
+        if src.exists():
+            shutil.copy2(src, DOCS / name)
+            print(f"✓ {DOCS / name} copié")
+        else:
+            print(f"⚠ {src} introuvable, ignoré")
 
 
 if __name__ == "__main__":

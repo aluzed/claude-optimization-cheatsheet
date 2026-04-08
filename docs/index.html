@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cheatsheet — Optimiser sa consommation de tokens avec Claude Code</title>
+<title>Cheatsheet</title>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -42,15 +42,16 @@
     padding: 5px; box-shadow: 3px 3px 0 var(--ink);
     transform: rotate(2deg);
   }
-  .lang-switch a {
+  .lang-switch button {
     display: inline-flex; align-items: center; justify-content: center;
     width: 38px; height: 38px; border-radius: 50%;
-    text-decoration: none; font-size: 22px; line-height: 1;
+    background: transparent; border: none; cursor: pointer;
+    font-size: 22px; line-height: 1; padding: 0;
     filter: grayscale(0.55); opacity: 0.55;
     transition: filter 0.15s ease, opacity 0.15s ease, background 0.15s ease;
   }
-  .lang-switch a:hover { filter: grayscale(0); opacity: 1; }
-  .lang-switch a.active {
+  .lang-switch button:hover { filter: grayscale(0); opacity: 1; }
+  .lang-switch button.active {
     filter: grayscale(0); opacity: 1;
     background: var(--accent-yellow);
     box-shadow: inset 0 0 0 1.5px var(--ink);
@@ -100,6 +101,12 @@
   code { background: var(--paper); color: #b85c3a; padding: 1px 7px; border-radius: 4px; font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; border: 1px dashed #d4b8a8; }
   em { font-style: italic; font-weight: 500; }
   footer { text-align: center; color: var(--ink-soft); font-family: "Caveat", cursive; font-size: 20px; margin-top: 50px; padding-top: 20px; border-top: 2px dashed var(--border-soft); }
+  /* État de chargement / erreur */
+  .cs-loading, .cs-error {
+    text-align: center; padding: 40px 20px;
+    font-family: "Caveat", cursive; font-size: 24px; color: var(--ink-soft);
+  }
+  .cs-error { color: #b85c3a; }
   /* Impression / export PDF via window.print() */
   @media print {
     @page { size: A4; margin: 12mm 10mm; }
@@ -137,134 +144,192 @@
     h1 { font-size: 34px; }
     .tip-content { font-size: 17px; }
     .download-btn { padding: 9px 16px; font-size: 17px; }
-    .lang-switch a { width: 32px; height: 32px; font-size: 18px; }
+    .lang-switch button { width: 32px; height: 32px; font-size: 18px; }
   }
 </style>
 </head>
 <body>
 
 <div class="top-bar">
-<button class="download-btn" onclick="downloadPDF()">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/>
-    <line x1="12" y1="15" x2="12" y2="3"/>
-  </svg>
-  Télécharger en PDF
-</button>
+  <nav class="lang-switch" aria-label="Language">
+    <button type="button" data-lang="fr" title="Français">🇫🇷</button>
+    <button type="button" data-lang="en" title="English">🇬🇧</button>
+  </nav>
+  <button class="download-btn" onclick="downloadPDF()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    <span id="pdf-label">Télécharger en PDF</span>
+  </button>
 </div>
 
 <div class="container" id="cheatsheet">
 
   <header>
     <div class="badge">✦ Cheatsheet ✦</div>
-    <h1>Optimiser sa consommation de tokens avec Claude Code</h1>
-    <p class="subtitle">Récapitulatif de hacks pour réduire la consommation de tokens et mieux contrôler ses coûts sur Claude Code, classés par niveau de difficulté.</p>
+    <h1 id="cs-title">…</h1>
+    <p class="subtitle" id="cs-subtitle"></p>
   </header>
 
-  <section class="section">
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Nouvelles sessions</span> — <code>/clear</code> entre tâches sans rapport.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Déconnecter les MCP inutiles</span> — un seul serveur peut coûter ~18 000 tokens/message. Préférer les CLI (ex: Google Workspace CLI vs MCP Google Calendar).</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Regrouper les prompts</span> — 3 messages séparés = 3x plus cher qu&#x27;un seul combiné. Éditer/régénérer plutôt que corriger en follow-up.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Plan mode d&#x27;abord</span> — évite que Claude parte dans la mauvaise direction. Ajouter dans <code>CLAUDE.md</code> : <em>&quot;Ne fais aucun changement tant que tu n&#x27;as pas 95% de confiance&quot;</em>.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title"><code>/context</code> et <code>/cost</code></span> — voir ce qui consomme (historique, MCP, fichiers). <code>/usage</code> en mode subscription.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">/statusline</span> — affiche modèle, % contexte utilisé, rate limit en temps réel dans le terminal.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Dashboard cloud</span> — checker sa conso toutes les 20-30 min sur <em>claude.ai &gt; Settings &gt; Usage</em>.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Être précis dans ce qu&#x27;on colle</span> — ne pas balancer un fichier entier si seule une fonction est concernée.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Surveiller Claude</span> — l&#x27;arrêter s&#x27;il boucle ou part dans la mauvaise direction, ça économise des milliers de tokens.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title"><code>CLAUDE.md</code> léger (&lt;200 lignes)</span> — le traiter comme un index avec des références vers les fichiers, pas le contenu lui-même.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Références chirurgicales</span> — <code>@fichier.ts</code> + nom de fonction précis, ne pas dire <em>&quot;trouve le bug dans mon repo&quot;</em>.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Compacter à 60%</span> — l&#x27;autocompact se déclenche à 95% (trop tard). Après 3-4 compacts, faire un résumé → <code>/clear</code> → renvoyer le résumé.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Attention aux pauses</span> — le prompt cache expire après 5 min. Faire <code>/compact</code> avant de s&#x27;absenter.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Outputs de commandes</span> — un <code>git log</code> peut injecter des centaines de lignes dans le contexte. Utiliser des outils comme RTK pour résumer les outputs.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Choisir le bon modèle</span> — Sonnet par défaut (80% des cas), Haiku pour sous-agents/tâches simples, Opus pour architecture/planification complexe.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Coût des sub-agents</span> — 7-10x plus de tokens qu&#x27;une session standard. Déléguer les tâches simples à Haiku.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Peak vs Off-peak</span> — Peak = 14h-20h (heure FR) en semaine. Off-peak = après 20h + weekends. Lancer les grosses tâches en off-peak. Avant un reset, lancer des agents en parallèle pour consommer le reste.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title"><code>CLAUDE.md</code> comme source de vérité</span> — stocker des décisions, pas des conversations. Y mettre les règles de gestion (ex: modèle par défaut des sub-agents).</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title"><code>--allowedTools</code> au lancement</span> — restreindre les outils disponibles et réduire l&#x27;overhead système.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Worktrees git pour découper</span> — chaque sous-tâche dans une branche/session isolée, contexte minimal.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Prompts en anglais</span> — ~30% moins de tokens qu&#x27;en français pour le même contenu (tokenisation plus efficace).</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title">Limites de lignes dans les instructions</span> — ex: <em>&quot;résume en 10 lignes max&quot;</em> pour contrôler la taille des réponses.</div>
-    </div>
-    <div class="tip">
-      <div class="tip-bullet">✓</div>
-      <div class="tip-content"><span class="tip-title"><code>--model</code> en flag</span> — switcher de modèle ponctuellement sans changer la config globale.</div>
-    </div>
+  <section class="section" id="cs-section">
+    <div class="cs-loading">Chargement…</div>
   </section>
 
-  <footer>
-    ✦ Optimiser sa consommation de tokens avec Claude Code ✦
-  </footer>
+  <footer id="cs-footer">✦</footer>
 
 </div>
 
 <script>
-  function downloadPDF() { window.print(); }
+(() => {
+  const LANG_META = {
+    fr: { flag: "🇫🇷", label: "Français", pdfLabel: "Télécharger en PDF", file: "fr.md" },
+    en: { flag: "🇬🇧", label: "English",  pdfLabel: "Download as PDF",   file: "en.md" },
+  };
+  const DEFAULT_LANG = "fr";
+  const STORAGE_KEY = "cheatsheet-lang";
+
+  const cache = {}; // lang -> parsed object
+
+  // --- Markdown parsing -------------------------------------------------------
+
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function inlineMd(text) {
+    const placeholders = [];
+    text = text.replace(/`([^`]+)`/g, (_, code) => {
+      placeholders.push(`<code>${escapeHtml(code)}</code>`);
+      return `\u0000${placeholders.length - 1}\u0000`;
+    });
+    text = escapeHtml(text);
+    text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    text = text.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>");
+    text = text.replace(/\u0000(\d+)\u0000/g, (_, i) => placeholders[+i]);
+    return text;
+  }
+
+  function splitBullet(b) {
+    const m = b.match(/^\*\*(.+?)\*\*\s*[—–-]\s*(.*)$/);
+    if (m) return { title: inlineMd(m[1]), body: inlineMd(m[2]) };
+    return { title: "", body: inlineMd(b) };
+  }
+
+  function parseMarkdown(md) {
+    let title = "";
+    const introLines = [];
+    const bullets = [];
+    for (const raw of md.split("\n")) {
+      const line = raw.replace(/\s+$/, "");
+      if (!line.trim()) continue;
+      if (line.startsWith("# ")) {
+        title = line.slice(2).trim();
+      } else if (line.trimStart().startsWith("- ")) {
+        bullets.push(line.trimStart().slice(2).trim());
+      } else if (bullets.length === 0) {
+        introLines.push(line.trim());
+      }
+    }
+    return {
+      title,
+      intro: introLines.join(" "),
+      bullets: bullets.map(splitBullet),
+    };
+  }
+
+  // --- Rendu ------------------------------------------------------------------
+
+  function render(parsed, lang) {
+    document.documentElement.lang = lang;
+    document.title = `Cheatsheet — ${parsed.title}`;
+
+    document.getElementById("cs-title").textContent = parsed.title;
+    document.getElementById("cs-subtitle").textContent = parsed.intro;
+    document.getElementById("cs-footer").textContent = `✦ ${parsed.title} ✦`;
+    document.getElementById("pdf-label").textContent = LANG_META[lang].pdfLabel;
+
+    const section = document.getElementById("cs-section");
+    section.innerHTML = parsed.bullets
+      .map(({ title, body }) => {
+        const titleHtml = title ? `<span class="tip-title">${title}</span> — ` : "";
+        return (
+          `<div class="tip">` +
+          `<div class="tip-bullet">✓</div>` +
+          `<div class="tip-content">${titleHtml}${body}</div>` +
+          `</div>`
+        );
+      })
+      .join("\n");
+
+    // Met à jour les pills (active state)
+    document.querySelectorAll(".lang-switch button").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.lang === lang);
+      if (btn.dataset.lang === lang) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
+    });
+  }
+
+  function showError(msg) {
+    const section = document.getElementById("cs-section");
+    section.innerHTML = `<div class="cs-error">${escapeHtml(msg)}</div>`;
+  }
+
+  // --- Chargement -------------------------------------------------------------
+
+  async function loadLang(lang) {
+    if (cache[lang]) return cache[lang];
+    const res = await fetch(LANG_META[lang].file, { cache: "no-cache" });
+    if (!res.ok) throw new Error(`HTTP ${res.status} on ${LANG_META[lang].file}`);
+    const md = await res.text();
+    const parsed = parseMarkdown(md);
+    cache[lang] = parsed;
+    return parsed;
+  }
+
+  async function setLang(lang) {
+    if (!LANG_META[lang]) lang = DEFAULT_LANG;
+    try {
+      const parsed = await loadLang(lang);
+      render(parsed, lang);
+      try { localStorage.setItem(STORAGE_KEY, lang); } catch (_) {}
+      const url = new URL(window.location.href);
+      url.searchParams.set("lang", lang);
+      history.replaceState(null, "", url);
+    } catch (e) {
+      console.error(e);
+      showError(`Impossible de charger ${LANG_META[lang].file} — ${e.message}`);
+    }
+  }
+
+  function initialLang() {
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("lang");
+    if (fromUrl && LANG_META[fromUrl]) return fromUrl;
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored && LANG_META[stored]) return stored;
+    } catch (_) {}
+    const nav = (navigator.language || "").slice(0, 2);
+    if (LANG_META[nav]) return nav;
+    return DEFAULT_LANG;
+  }
+
+  window.downloadPDF = () => window.print();
+
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".lang-switch button").forEach((btn) => {
+      btn.addEventListener("click", () => setLang(btn.dataset.lang));
+    });
+    setLang(initialLang());
+  });
+})();
 </script>
 
 </body>
