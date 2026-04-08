@@ -182,7 +182,37 @@ CSS = r"""
   code { background: var(--paper); color: #b85c3a; padding: 1px 7px; border-radius: 4px; font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; border: 1px dashed #d4b8a8; }
   em { font-style: italic; font-weight: 500; }
   footer { text-align: center; color: var(--ink-soft); font-family: "Caveat", cursive; font-size: 20px; margin-top: 50px; padding-top: 20px; border-top: 2px dashed var(--border-soft); }
-  @media print { .top-bar { display: none; } .container { box-shadow: none; padding-top: 40px; } .tip, .section { break-inside: avoid; } }
+  /* Impression / export PDF via window.print() */
+  @media print {
+    @page { size: A4; margin: 12mm 10mm; }
+    html, body {
+      background: var(--paper) !important;
+      font-size: 13pt;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .top-bar { display: none !important; }
+    .container {
+      max-width: 100%;
+      margin: 0;
+      padding: 0 10px;
+      min-height: auto;
+      box-shadow: none;
+      border: none;
+      background-image: none; /* on retire les lignes de cahier en print */
+    }
+    .container::before { display: none; }
+    header { margin-bottom: 18px; padding-bottom: 12px; }
+    h1 { font-size: 30pt; }
+    .badge { font-size: 12pt; }
+    .subtitle { font-size: 12pt; }
+    .section { margin-bottom: 14px; padding-left: 8px; }
+    .tip { padding: 4px 0; margin-bottom: 0; page-break-inside: avoid; break-inside: avoid; }
+    .tip-content { font-size: 12pt; line-height: 1.35; }
+    .tip-bullet { font-size: 14pt; }
+    code { font-size: 10pt; }
+    footer { margin-top: 20px; padding-top: 10px; font-size: 11pt; }
+  }
   @media (max-width: 700px) {
     .container { padding: 110px 28px 40px; }
     .container::before { left: 40px; }
@@ -194,22 +224,7 @@ CSS = r"""
 """
 
 PDF_SCRIPT = r"""
-  function downloadPDF() {
-    const bar = document.querySelector('.top-bar');
-    bar.style.display = 'none';
-    const element = document.getElementById('cheatsheet');
-    const opt = {
-      margin:       [8, 8, 8, 8],
-      filename:     'cheatsheet.pdf',
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, backgroundColor: '#fdfbf5', useCORS: true },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-    html2pdf().set(opt).from(element).save().then(() => {
-      bar.style.display = 'inline-flex';
-    });
-  }
+  function downloadPDF() { window.print(); }
 """
 
 
@@ -268,7 +283,6 @@ def render_html(title: str, intro: str, bullets: list,
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cheatsheet — {html.escape(title)}</title>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Patrick+Hand&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>{CSS}</style>
 </head>
 <body>
